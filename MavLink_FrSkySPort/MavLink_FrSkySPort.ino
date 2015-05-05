@@ -61,7 +61,7 @@ AccZ            ( Z Axis average vibration m/s?)
 #define MSG_RATE            10              // Hertz
 
 //#define DEBUG_VFR_HUD
-#define DEBUG_GPS_RAW
+//#define DEBUG_GPS_RAW
 //#define DEBUG_ACC
 //#define DEBUG_BAT
 //#define DEBUG_MODE
@@ -217,13 +217,12 @@ void loop()  {
 
   _MavLink_receive();                   // Check MavLink communication
 
-  FrSkySPort_Process();               // Check FrSky S.Port communication
-
 }
 
 
 void _MavLink_receive() { 
   mavlink_message_t msg;
+  msg.msgid = 0; // avoids a warning
   mavlink_status_t status;
 
   while(_MavLinkSerial.available()) 
