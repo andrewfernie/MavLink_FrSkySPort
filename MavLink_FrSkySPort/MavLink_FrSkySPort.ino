@@ -301,7 +301,6 @@ void loop()  {
   debugSerial.println(cell[0]);
   debugSerial.println("-------");
   
- /*
   for(int i = 0; i < MAXCELLS; i++){
     debugSerial.print(cell[i]/1000);
     debugSerial.print("V, ");
