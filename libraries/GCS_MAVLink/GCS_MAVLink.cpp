@@ -19,15 +19,15 @@ version 2.1 of the License, or (at your option) any later version.
 Stream	*mavlink_comm_0_port;
 Stream	*mavlink_comm_1_port;
 
-mavlink_system_t mavlink_system = {12,1,0,0}; //modified
+// mavlink_system_t mavlink_system = {123,123,0,0}; //set to default apm AP
 
 uint8_t mavlink_check_target(uint8_t sysid, uint8_t compid)
 {
-    if (sysid != mavlink_system.sysid)
+    if (sysid != mavlink_system.sysid || compid != mavlink_system.compid) {
         return 1;
-    // Currently we are not checking for correct compid since APM is not passing mavlink info to any subsystem
-    // If it is addressed to our system ID we assume it is for us
-    return 0; // no error
+    } else {
+        return 0; // no error
+    }
 }
 
 /*

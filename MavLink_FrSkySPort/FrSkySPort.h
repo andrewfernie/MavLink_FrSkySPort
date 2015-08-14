@@ -9,8 +9,30 @@
 #define SENSOR_ID4         0x67		// sensor hub data id
 
 */
+/*
+#define SENSOR_ID_VARIO         0x00 //  0
+#define SENSOR_ID_ALTITUDE      0x00 //  1 +1
+#define SENSOR_ID_FLVSS         0xA1 //  2
+#define SENSOR_ID_FAS           0x22 //  3
+#define SENSOR_ID_GPS           0x83 //  4
+#define SENSOR_ID_RPM           0xE4 //  5
+#define SENSOR_ID_HDOP          0x45 //  6
+#define SENSOR_ID_ACCX          0x45 //  7
 
+#define SENSOR_ID_ACCY          0xC6 //  8
+
+#define SENSOR_ID_ACCZ          0x45 //  9
+
+#define SENSOR_ID_GPS_STATUS    0xC6 // 10
+
+#define SENSOR_ID_ROLL_ANGLE    0x45 // 11
+
+#define SENSOR_ID_PITCH_ANGLE   0xC6 // 12
+#define SENSOR_ID_FLIGHT_MODE   0xC6 // 13
+#define SENSOR_ID_ARM_MODE      0xC6 // 14
+*/
 // To disable a specific sensor, just comment out the sensor_id define (place // first on the line defining the sensor id)
+/*
 #define SENSOR_ID_VARIO             0x00 // 0
 #define SENSOR_ID_FLVSS             0xA1 // 1
 #define SENSOR_ID_FAS               0x22 // 2
@@ -18,7 +40,7 @@
 #define SENSOR_ID_RPM               0xE4 // 4
 #define SENSOR_ID_SP2UH             0x45 // 5
 #define SENSOR_ID_SP2UR             0xC6 // 6
-
+*/
 // We'll use some undefined SENSOR_ID's so expect things to break if OpenTX changes
 
 // Frsky-specific

@@ -1,4 +1,3 @@
-
 /*
 APM2.5 Mavlink to FrSky X8R SPort interface using Teensy 3.1  http://www.pjrc.com/teensy/index.html
  based on ideas found here http://code.google.com/p/telemetry-convert/
@@ -13,7 +12,6 @@ APM2.5 Mavlink to FrSky X8R SPort interface using Teensy 3.1  http://www.pjrc.co
  APM Telemetry DF13-5  Pin 2 --> RX2
  APM Telemetry DF13-5  Pin 3 --> TX2
  APM Telemetry DF13-5  Pin 5 --> GND
-
  Note that when used with other telemetry device (3DR Radio 433 or 3DR Bluetooth tested) in parallel on the same port the Teensy should only Receive, so please remove it's TX output (RX input on PixHawk or APM)
  
  Analog input  --> A0 (pin14) on Teensy 3.1 ( max 3.3 V ) - Not used 
@@ -24,7 +22,6 @@ APM2.5 Mavlink to FrSky X8R SPort interface using Teensy 3.1  http://www.pjrc.co
  
 ******************************************************
 Data transmitted to FrSky Taranis:
-
 Cell            ( Voltage of Cell=Cells/(Number of cells). [V]) 
 Cells           ( Voltage from LiPo [V] )
 A2              ( HDOP value * 25 - 8 bit resolution)
@@ -43,35 +40,43 @@ Longitud        ( Longitud )
 Latitud         ( Latitud )
 Dist            ( Will be calculated by FrSky Taranis as the distance from first received lat/long = Home Position )
 Fuel            ( Current Flight Mode reported by Mavlink )
-
 AccX            ( X Axis average vibration m/s?)
 AccY            ( Y Axis average vibration m/s?)
 AccZ            ( Z Axis average vibration m/s?)
-
 ******************************************************
-
  */
 
 #include "GCS_MAVLink.h"
 #include "FrSkySPort.h"
 
-#define debugSerial           Serial
+#define debugSerial         Serial
 #define _MavLinkSerial      Serial2
-#define START                   1
+#define _MavLinkSerialBaud  57600
+#define START               1
 #define MSG_RATE            10              // Hertz
+#define AP_SYSID            1 // autopilot system id
+#define AP_CMPID            1 // autopilot component id
+#define GB_SYSID            71 // gimbal system id
+#define GB_CMPID            67 // gimbal component id
+#define MY_SYSID            123 // teensy system id
+#define MY_CMPID            123 // teensy component id
 
 //#define DEBUG_VFR_HUD
 //#define DEBUG_GPS_RAW
 //#define DEBUG_ACC
 //#define DEBUG_BAT
 //#define DEBUG_MODE
+//#define DEBUG_MAVLINK_MSGS
 //#define DEBUG_STATUS
 //#define DEBUG_ATTITUDE
-
+//#define DEBUG_GIMBAL
 //#define DEBUG_FRSKY_SENSOR_REQUEST
-
 //#define DEBUG_AVERAGE_VOLTAGE
 //#define DEBUG_PARSE_STATUS_TEXT
+//#define DEBUG_LIPO_SINGLE_CELL_MONITOR
+//#define DEBUG_RC_CHANNELS
+
+//#define USE_RC_CHANNELS
 
 /// Wolke lipo-single-cell-monitor
 /*
@@ -84,8 +89,8 @@ AccZ            ( Z Axis average vibration m/s?)
  *
  */
 
-#define USE_SINGLE_CELL_MONITOR
-#define USE_AP_VOLTAGE_BATTERY_FROM_SINGLE_CELL_MONITOR // use this only with enabled USE_SINGLE_CELL_MONITOR
+//#define USE_SINGLE_CELL_MONITOR
+//#define USE_AP_VOLTAGE_BATTERY_FROM_SINGLE_CELL_MONITOR // use this only with enabled USE_SINGLE_CELL_MONITOR
 #ifdef USE_SINGLE_CELL_MONITOR
 // configure number maximum connected analog inputs(cells) if you build an six cell network then MAXCELLS is 6 
 #define MAXCELLS 6
@@ -110,6 +115,14 @@ int8_t    ap_battery_remaining = 0;   // Remaining battery energy: (0%: 0, 100%:
 uint8_t    ap_fixtype = 3;                //   0= No GPS, 1 = No Fix, 2 = 2D Fix, 3 = 3D Fix
 uint8_t    ap_sat_visible = 0;            // number of visible satelites
 
+#ifdef USE_RC_CHANNELS
+// Message #65 RC_CHANNELS
+uint8_t   ap_chancount = 0;      // Number of RC_Channels used
+uint16_t  ap_chan_raw[18] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}; // RC channel x input value, in microseconds. A value of UINT16_MAX (65535U)
+//uint8_t   ap_rssi = 0;        // Receive signal strength indicator, 0: 0%, 100: 100%, 255: invalid/unknown.
+//uint32_t  ap_time_boot_ms = 0;
+#endif
+
 // FrSky Taranis uses the first recieved lat/long as homeposition. 
 int32_t    ap_latitude = 0;               // 585522540;
 int32_t    ap_longitude = 0;              // 162344467;
@@ -117,7 +130,7 @@ int32_t    ap_gps_altitude = 0;           // 1000 = 1m
 int32_t    ap_gps_speed = 0;
 uint16_t   ap_gps_hdop = 255;             // GPS HDOP horizontal dilution of position in cm (m*100). If unknown, set to: 65535
 // uint16_t    ap_vdop=0;                 // GPS VDOP horizontal dilution of position in cm (m*100). If unknown, set to: 65535
-// uint16_t    ap_cog = 0;                // Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: 65535
+uint32_t    ap_cog = 0;                // Course over ground (NOT heading, but direction of movement) in degrees * 100, 0.0..359.99 degrees. If unknown, set to: 65535
 
 
 // Message #74 VFR_HUD 
@@ -135,7 +148,6 @@ int32_t    ap_climb_rate=0;        // 100= 1m/s
 
 // Messages needed to use current Angles and axis speeds
 // Message #30 ATTITUDE           //MAVLINK_MSG_ID_ATTITUDE
-
 int32_t ap_roll_angle = 0;    //Roll angle (deg -180/180)
 int32_t ap_pitch_angle = 0;   //Pitch angle (deg -180/180)
 uint32_t ap_yaw_angle = 0;     //Yaw angle (rad)
@@ -151,7 +163,6 @@ uint16_t   ap_status_text_id = 0;
 mavlink_statustext_t statustext;
 
 /*
-
   MAV_SEVERITY_EMERGENCY=0, System is unusable. This is a "panic" condition.
   MAV_SEVERITY_ALERT=1, Action should be taken immediately. Indicates error in non-critical systems.
   MAV_SEVERITY_CRITICAL=2, Action must be taken immediately. Indicates failure in a primary system.
@@ -161,7 +172,6 @@ mavlink_statustext_t statustext;
   MAV_SEVERITY_INFO=6, Normal operational messages. Useful for logging. No action is required for these messages.
   MAV_SEVERITY_DEBUG=7, Useful non-operational messages that can assist in debugging. These should not occur during normal operation.
   MAV_SEVERITY_ENUM_END=8,
-
 */
 
 
@@ -184,6 +194,7 @@ unsigned long hb_timer;
 int led = 13;
 
 mavlink_message_t msg;
+mavlink_system_t mavlink_system = {MY_SYSID,MY_CMPID};
 
 /// Wolke lipo-single-cell-monitor
 #ifdef USE_SINGLE_CELL_MONITOR
@@ -219,15 +230,20 @@ double smoothedVal[MAXCELLS+1]; // this holds the last loop value
 
 // ******************************************
 void setup()  {
-
+  
+  delay(20000);   // Waiting 20sec for bootup of pixhawk or apm
+  
   FrSkySPort_Init();
-  _MavLinkSerial.begin(57600);
-  //debugSerial.begin(57600);
+  
+
+  
+
+
+  _MavLinkSerial.begin(_MavLinkSerialBaud);
   MavLink_Connected = 0;
   MavLink_Connected_timer=millis();
   hb_timer = millis();
   hb_count = 0;
-
 
   pinMode(led,OUTPUT);
   pinMode(12,OUTPUT);
@@ -263,8 +279,7 @@ void loop()  {
       cells_in_use = i;
       break;
     }
-    else
-    {
+    else {
       cells_in_use = MAXCELLS;
     }
     // USE Low Pass filter
@@ -280,16 +295,20 @@ void loop()  {
   }
   alllipocells = cell[cells_in_use -1];
 
-  //debugSerial.println(", end");
+#ifdef DEBUG_LIPO_SINGLE_CELL_MONITOR
 
-  /*
   debugSerial.println(aread[0]);
   debugSerial.println(cell[0]);
   debugSerial.println("-------");
- */
+  
  /*
   for(int i = 0; i < MAXCELLS; i++){
-    
+    debugSerial.print(cell[i]/1000);
+    debugSerial.print("V, ");
+  }
+  debugSerial.println();
+  
+  for(int i = 0; i < MAXCELLS; i++){
     debugSerial.print( aread[i]);
     debugSerial.print( ", ");    
   }  
@@ -298,28 +317,44 @@ void loop()  {
   debugSerial.print( ", ");
   debugSerial.print(", sum ");
   debugSerial.println(alllipocells);
-   */
-  
+#endif
 #endif
   /// ~Wolke lipo-single-cell-monitor
 
+  // Send a heartbeat over the mavlink
   uint16_t len;
+  //mavlink_msg_heartbeat_pack(123, 123, &msg, MAV_TYPE_ONBOARD_CONTROLLER, MAV_AUTOPILOT_GENERIC, MAV_MODE_PREFLIGHT, <CUSTOM_MODE>, MAV_STATE_STANDBY);
+  //mavlink_msg_heartbeat_pack(mavlink_system.sysid, mavlink_system.compid, &msg, 0, 18, 0, 0, 4);
+  //len = mavlink_msg_to_send_buffer(buf, &msg);
+  //_MavLinkSerial.write(buf,len);
 
   if(millis()-hb_timer > 1500) {
     hb_timer=millis();
     if(!MavLink_Connected) {    // Start requesting data streams from MavLink
+#ifdef DEBUG_MODE
+      debugSerial.print(millis());
+      debugSerial.print("\tEntering stream request");
+      debugSerial.println();
+#endif
       digitalWrite(led,HIGH);
-      mavlink_msg_request_data_stream_pack(0xFF,0xBE,&msg,1,1,MAV_DATA_STREAM_EXTENDED_STATUS, MSG_RATE, START);
+      // mavlink_msg_request_data_stream_pack(0xFF,0xBE,&msg,1,1,MAV_DATA_STREAM_EXTENDED_STATUS, MSG_RATE, START);
+      mavlink_msg_request_data_stream_pack(mavlink_system.sysid,mavlink_system.compid,&msg,1,1,MAV_DATA_STREAM_EXTENDED_STATUS, MSG_RATE, START);
       len = mavlink_msg_to_send_buffer(buf, &msg);
       _MavLinkSerial.write(buf,len);
       delay(10);
-      mavlink_msg_request_data_stream_pack(0xFF,0xBE,&msg,1,1,MAV_DATA_STREAM_EXTRA2, MSG_RATE, START);
+      mavlink_msg_request_data_stream_pack(mavlink_system.sysid,mavlink_system.compid,&msg,1,1,MAV_DATA_STREAM_EXTRA2, MSG_RATE, START);
       len = mavlink_msg_to_send_buffer(buf, &msg);
       _MavLinkSerial.write(buf,len);
       delay(10);
-      mavlink_msg_request_data_stream_pack(0xFF,0xBE,&msg,1,1,MAV_DATA_STREAM_RAW_SENSORS, MSG_RATE, START);
+      mavlink_msg_request_data_stream_pack(mavlink_system.sysid,mavlink_system.compid,&msg,1,1,MAV_DATA_STREAM_RAW_SENSORS, MSG_RATE, START);
       len = mavlink_msg_to_send_buffer(buf, &msg);
       _MavLinkSerial.write(buf,len);
+#ifdef USE_RC_CHANNELS
+      delay(10);
+      mavlink_msg_request_data_stream_pack(mavlink_system.sysid,mavlink_system.compid,&msg,1,1,MAV_DATA_STREAM_RC_CHANNELS, MSG_RATE, START);
+      len = mavlink_msg_to_send_buffer(buf, &msg);
+      _MavLinkSerial.write(buf,len);
+#endif
       digitalWrite(led,LOW);
     }
   }
@@ -333,6 +368,10 @@ void loop()  {
 
   FrSkySPort_Process();               // Check FrSky S.Port communication
 
+
+  
+
+
 }
 
 
@@ -343,7 +382,7 @@ void _MavLink_receive() {
   while(_MavLinkSerial.available()) 
   { 
     uint8_t c = _MavLinkSerial.read();
-    if(mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status)) 
+    if(mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status) && (AP_SYSID == msg.sysid && AP_CMPID == msg.compid)) // only proceed with autopilot messages
     {
       switch(msg.msgid)
       {
@@ -514,7 +553,74 @@ break;
         debugSerial.print(mavlink_msg_attitude_get_yaw(&msg));
         debugSerial.println();
 #endif
+        break;
+        
+#ifdef USE_RC_CHANNELS
+      case MAVLINK_MSG_ID_RC_CHANNELS:    //65    
+        ap_chancount = mavlink_msg_rc_channels_get_chancount(&msg);     // Number of RC Channels used
+        //ap_time_boot_ms = mavlink_msg_rc_channels_get_time_boot_ms(&msg);
+        ap_chan_raw[1] = mavlink_msg_rc_channels_get_chan1_raw(&msg);   // The PPM values of the RC channels received. 
+        ap_chan_raw[2] = mavlink_msg_rc_channels_get_chan2_raw(&msg);   // The standard PPM modulation is as follows: 
+        ap_chan_raw[3] = mavlink_msg_rc_channels_get_chan3_raw(&msg);   // 1000 microseconds: 0%, 2000 microseconds: 100%. 
+        ap_chan_raw[4] = mavlink_msg_rc_channels_get_chan4_raw(&msg);   // Individual receivers/transmitters might violate this specification.
+        ap_chan_raw[5] = mavlink_msg_rc_channels_get_chan5_raw(&msg);
+        ap_chan_raw[6] = mavlink_msg_rc_channels_get_chan6_raw(&msg);
+        ap_chan_raw[7] = mavlink_msg_rc_channels_get_chan7_raw(&msg);
+        ap_chan_raw[8] = mavlink_msg_rc_channels_get_chan8_raw(&msg);
+        
+        ap_chan_raw[9] = mavlink_msg_rc_channels_get_chan9_raw(&msg);
+        ap_chan_raw[10] = mavlink_msg_rc_channels_get_chan10_raw(&msg);
+        ap_chan_raw[11] = mavlink_msg_rc_channels_get_chan11_raw(&msg);
+        ap_chan_raw[12] = mavlink_msg_rc_channels_get_chan12_raw(&msg);
+        ap_chan_raw[13] = mavlink_msg_rc_channels_get_chan13_raw(&msg);
+        ap_chan_raw[14] = mavlink_msg_rc_channels_get_chan14_raw(&msg);
+        ap_chan_raw[15] = mavlink_msg_rc_channels_get_chan15_raw(&msg);
+        ap_chan_raw[16] = mavlink_msg_rc_channels_get_chan16_raw(&msg);
+        ap_chan_raw[17] = mavlink_msg_rc_channels_get_chan17_raw(&msg);
+        ap_chan_raw[18] = mavlink_msg_rc_channels_get_chan18_raw(&msg);
+        //ap_rssi = mavlink_msg_rc_channels_get_rssi(&msg);       // Receive signal strength indicator, 0: 0%, 100: 100%, 255: invalid/unknown.
+
+#ifdef DEBUG_RC_CHANNELS
+        debugSerial.print(millis());
+        debugSerial.print(" - ");
+        //debugSerial.print(ap_time_boot_ms);
+        debugSerial.print("\tMAVLINK_MSG_ID_RC_CHANNELS: chancount: ");
+        debugSerial.print(ap_chancount);
+        debugSerial.println();
+        debugSerial.print("\tMAVLINK_MSG_ID_RC_CHANNELS: ap_chan1-4_raw: ");
+        for (int i = 1; i <= 4; i++) {
+          debugSerial.print(ap_chan_raw[i]);
+          debugSerial.print(", ");
+        }
+        debugSerial.println();
+        debugSerial.print("\tMAVLINK_MSG_ID_RC_CHANNELS: ap_chan5-8_raw: ");
+        for (int i = 5; i <= 8; i++) {
+          debugSerial.print(ap_chan_raw[i]);
+          debugSerial.print(", ");
+        }
+        debugSerial.println();
+        debugSerial.print("\tMAVLINK_MSG_ID_RC_CHANNELS: ap_chan9-12_raw: ");
+        for (int i = 9; i <= 12; i++) {
+          debugSerial.print(ap_chan_raw[i]);
+          debugSerial.print(", ");
+        }
+        debugSerial.println();
+        debugSerial.print("\tMAVLINK_MSG_ID_RC_CHANNELS: ap_chan13-16_raw: ");
+        for (int i = 13; i <= 16; i++) {
+          debugSerial.print(ap_chan_raw[i]);
+          debugSerial.print(", ");
+        }
+        debugSerial.println();
+        debugSerial.print("\tMAVLINK_MSG_ID_RC_CHANNELS: ap_chan17-18_raw: ");
+        for (int i = 16; i < 18; i++) {
+          debugSerial.print(ap_chan_raw[i]);
+          debugSerial.print(", ");
+        }
+        debugSerial.println();
+#endif
       break;
+#endif
+
       case MAVLINK_MSG_ID_VFR_HUD:   //  74
         ap_groundspeed = mavlink_msg_vfr_hud_get_groundspeed(&msg);      // 100 = 1m/s
         ap_heading = mavlink_msg_vfr_hud_get_heading(&msg);              // 100 = 100 deg
@@ -537,14 +643,50 @@ break;
 #endif
         break; 
       default:
+#ifdef DEBUG_MAVLINK_MSGS
+        debugSerial.print(millis());
+        debugSerial.print("\tMSG: ");
+        debugSerial.print(msg.msgid);        
+        debugSerial.println();
+#endif
         break;
       }
 
-    }
+    } else if (GB_SYSID == msg.sysid && GB_CMPID == msg.compid) // only proceed with gimbal messages
+    {
+      switch(msg.msgid)
+      {
+      case MAVLINK_MSG_ID_HEARTBEAT:  // 0
+#ifdef DEBUG_MODE
+        debugSerial.print(millis());
+        debugSerial.print("\tGIMBAL MESSAGE: ");
+        debugSerial.print((mavlink_msg_heartbeat_get_base_mode(&msg) & 0x80) > 7);
+        debugSerial.print(", custom_mode: ");
+        debugSerial.print(mavlink_msg_heartbeat_get_custom_mode(&msg));
+        debugSerial.println();
+#endif              
+      break;
+      }
+    } else {
+      switch(msg.msgid)
+      {
+      case MAVLINK_MSG_ID_HEARTBEAT:  // 0
+#ifdef DEBUG_MODE
+        debugSerial.print(millis());
+        debugSerial.print("\tOTHER MESSAGE: ");
+        debugSerial.print("sysid: ");
+        debugSerial.print(msg.sysid);
+        debugSerial.print(", compid: ");
+        debugSerial.print(msg.compid);
+        debugSerial.print(", base_mode: ");
+        debugSerial.print((mavlink_msg_heartbeat_get_base_mode(&msg) & 0x80) > 7);
+        debugSerial.print(", custom_mode: ");
+        debugSerial.print(mavlink_msg_heartbeat_get_custom_mode(&msg));
+        debugSerial.println();
+#endif              
+      break;
+      }
+    }      
+    
   }
 }
-
-
-
-
-
