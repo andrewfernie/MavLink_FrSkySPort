@@ -202,21 +202,12 @@ mavlink_system_t mavlink_system = {MY_SYSID,MY_CMPID};
 //cell voltage divider. this is dependent from your resitor voltage divider network 13bit
 double LIPOCELL_1TO8[13] =
 {
-<<<<<<< HEAD
   1913.528953519,
   933.688035297,
   622.955076603,
   473.787040052,
   373.105567418,
   317.423580786,
-=======
-  1897.85344189,// 10bit 237.350026082,
-  926.799312208,// 10bit 116.006256517,
-  618.198183455,// 10bit 77.3509473318,
-  470.134166514,// 10bit 58.7966886122,
-  370.317778975,// 10bit 46.3358699051,
-  315.045617465,// 10bit 39.4176445024,
->>>>>>> parent of 78e1b09... remove interrupts
   0.0, // diverders 7-12 not defined because my network includes only 6 voltage dividers
   0.0,
   0.0,
@@ -279,40 +270,27 @@ void setup()  {
 void loop()  {
 
   /// Wolke lipo-single-cell-monitor
-  #ifdef USE_SINGLE_CELL_MONITOR
-    double aread[MAXCELLS+1];
-    for(int i = 0; i < MAXCELLS; i++){
-      aread[i] = analogRead(i);
-      if(aread[i] < analogread_threshold ){
-        cells_in_use = i;
-        break;
-      }
-      else {
-        cells_in_use = MAXCELLS;
-      }
-      // USE Low Pass filter
-      smoothedVal[i] = ( aread[i] * (1 - lp_filter_val)) + (smoothedVal[i]  *  lp_filter_val);
-      aread[i] = round(smoothedVal[i]);
-      cell[i] = double (aread[i]/individualcelldivider[i]) * 1000;
-      if( i == 0 ) zelle[i] = round(cell[i]);
-      else zelle[i] =  round(cell[i] - cell[i-1]);
+#ifdef USE_SINGLE_CELL_MONITOR
+  double aread[MAXCELLS+1];
+  for(int i = 0; i < MAXCELLS; i++){
+    aread[i] = analogRead(i);
+    if(aread[i] < analogread_threshold ){
+      cells_in_use = i;
+      break;
     }
-<<<<<<< HEAD
+    else {
+      cells_in_use = MAXCELLS;
+    }
     // USE Low Pass filter
     smoothedVal[i] = ( aread[i] * (1 - lp_filter_val)) + (smoothedVal[i]  *  lp_filter_val);
     aread[i] = round(smoothedVal[i]);
     cell[i] = double (aread[i]/individualcelldivider[i]) * 1000;
-
-    //debugSerial.print( cell[i]);
-    //debugSerial.print( ", ");
-
     if( i == 0 ) zelle[i] = round(cell[i]);
     else zelle[i] =  round(cell[i] - cell[i-1]);
   }
   alllipocells = cell[cells_in_use -1];
 
 #ifdef DEBUG_LIPO_SINGLE_CELL_MONITOR
-
   debugSerial.println(aread[0]);
   debugSerial.println(cell[0]);
   debugSerial.println("-------");
@@ -334,25 +312,6 @@ void loop()  {
   debugSerial.println(alllipocells);
 #endif
 #endif
-=======
-    alllipocells = cell[cells_in_use -1];
-    
-    #ifdef DEBUG_LIPO_SINGLE_CELL_MONITOR
-      debugSerial.println(aread[0]);
-      debugSerial.println(cell[0]);
-      debugSerial.println("-------");
-	  for(int i = 0; i < MAXCELLS; i++){
-	    debugSerial.print( aread[i]);
-		debugSerial.print( ", ");
-      }
-	  debugSerial.print("cells in use: ");
-	  debugSerial.print(cells_in_use);
-	  debugSerial.print( ", ");
-	  debugSerial.print(", sum ");
-	  debugSerial.println(alllipocells);
-    #endif
-  #endif
->>>>>>> parent of 78e1b09... remove interrupts
   /// ~Wolke lipo-single-cell-monitor
 
   // Send a heartbeat over the mavlink
@@ -399,13 +358,8 @@ void loop()  {
   } 
 
   _MavLink_receive();                   // Check MavLink communication
-
   //FrSkySPort_Process();               // Check FrSky S.Port communication
-
-  
-  
-  
-  
+ 
 }
 
 
