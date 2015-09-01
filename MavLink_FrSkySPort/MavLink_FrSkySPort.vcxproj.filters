@@ -22,4 +22,9 @@
     <None Include="Mavlink.ino" />
     <None Include="led_control.ino" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Visual Micro\.MavLink_FrSkySPort.vsarduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
