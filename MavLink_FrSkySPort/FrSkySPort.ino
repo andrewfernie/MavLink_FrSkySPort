@@ -3,6 +3,8 @@
 #include "HardwareSerial.h"
 #include "FrSkySPort.h"
 
+//#define ENABLE_FLVSS
+
 #define _FrSkySPort_Serial            Serial1
 #define _FrSkySPort_C1                UART0_C1
 #define _FrSkySPort_C2                UART0_C2
@@ -94,12 +96,14 @@ uint16_t sendValueFASCurrent = 0;
 uint16_t sendValueFASVoltage = 0;
 void FrSkySPort_ProcessSensorRequest(uint8_t sensorId) 
 {
-  uint32_t temp=0;
-  uint8_t offset;
   switch(sensorId)
   {
+#ifdef ENABLE_FLVSS
   case SENSOR_ID_FLVSS:
   {
+      uint32_t temp=0;
+      uint8_t offset;
+
       printDebugPackageSend("FLVSS", nextFLVSS+1, 3);
       // We need cells to continue
       if(ap_cell_count < 1)
@@ -145,7 +149,7 @@ void FrSkySPort_ProcessSensorRequest(uint8_t sensorId)
         nextFLVSS=0;
     }
     break;
-
+#endif
   case SENSOR_ID_VARIO:
     FrSkySPort_SendPackage(FR_ID_VARIO, ap_climb_rate );       // 100 = 1m/s        
     break;
@@ -230,7 +234,7 @@ void FrSkySPort_ProcessSensorRequest(uint8_t sensorId)
     break;    
 
   case SENSOR_ID_RPM:
-    FrSkySPort_SendPackage(FR_ID_RPM, ap_throttle * 200+ap_battery_remaining*2);   //  * 2 if number of blades on Taranis is set to 2 + First 4 digits reserved for battery remaining in %
+    FrSkySPort_SendPackage(FR_ID_RPM, ap_battery_remaining);   
     break;
 
   case SENSOR_ID_HDOP:
@@ -379,7 +383,7 @@ extern "C" void sport_uart0_status_isr(void)
       waitingForSensorId = true;
     }
     else {
-      if ((waitingForSensorId == true) && (data == 0xA1)) {  
+      if ((waitingForSensorId == true) && (data == 0x22)) {  
         FrSkySPort_Process();
         _FrSkySPort_C3 |= UART_C3_TXDIR;
         _FrSkySPort_C2 &= ~UART_C2_RE;
